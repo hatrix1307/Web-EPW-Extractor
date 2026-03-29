@@ -1,0 +1,20 @@
+{
+  "name": "epw-tools",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@napi-rs/lzma": "^1.4.5",
+    "fflate": "^0.8.2",
+    "xz-decompress": "^0.2.3",
+    "xz-compat": "^1.2.1"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}
