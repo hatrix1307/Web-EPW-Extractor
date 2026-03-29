@@ -1,11 +1,5 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "framework": "vite",
-  "functions": {
-    "api/xz-compress.js": {
-      "memory": 3009,
-      "maxDuration": 60
-    }
-  }
+  "framework": "vite"
 }
