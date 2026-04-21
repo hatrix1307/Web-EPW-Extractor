@@ -11,7 +11,7 @@
 
     <header class="site-header">
       <h1>EPW Tools <span class="pill">EAG$WASM</span></h1>
-      <p>Extract and compile Eaglercraft <code>.epw</code> asset pack files &mdash; handles XZ sections, EPK v2.0 archives, and inline WASM/JS blobs.</p>
+      <p>Extract and compile Eaglercraft <code>.epw</code> and <code>.epk</code> asset pack files.</p>
     </header>
 
     <nav class="tabs">
@@ -19,203 +19,274 @@
       <button class="tab-btn"        data-tab="tab-compile">Compile</button>
     </nav>
 
-    <!-- ════════════ EXTRACTOR ════════════ -->
+    <!-- ════════════════════════════════════════════════════════════════
+         EXTRACTOR TAB — accepts both EPW and EPK
+    ════════════════════════════════════════════════════════════════ -->
     <section id="tab-extract" class="tab-panel active">
 
       <div id="extract-drop" class="dropzone">
-        <input type="file" id="extract-file" accept=".epw" />
+        <input type="file" id="extract-file" accept=".epw,.epk" />
         <div class="dz-icon">📦</div>
-        <p class="dz-label"><strong>Click or drag</strong> a <code>.epw</code> file here to extract</p>
+        <p class="dz-label">
+          <strong>Click or drag</strong> an <code>.epw</code> or <code>.epk</code> file here to extract
+        </p>
       </div>
 
       <div class="extract-grid">
-
-        <!-- Left: metadata + actions + log -->
         <div>
           <p class="section-label" style="margin-top:18px;">Metadata</p>
           <div id="extract-meta"><p class="placeholder-text">No file loaded yet.</p></div>
-
           <hr class="divider" />
-
           <div class="action-row">
             <button id="btn-download-zip"      class="btn-primary"   disabled>Download ZIP</button>
             <button id="btn-download-selected" class="btn-secondary" disabled>Download Selected</button>
           </div>
-
           <div class="log-panel" id="extract-log"></div>
         </div>
 
-        <!-- Right: file list -->
         <div>
           <div class="list-header">
             <p class="section-label" style="margin-top:18px; margin-bottom:0;">Extracted Files</p>
             <span id="extract-count" class="count-badge"></span>
           </div>
           <div class="filter-row">
-            <input id="extract-filter" type="text" placeholder="Filter by name…" />
+            <input id="extract-filter" type="text" placeholder="Filter by name or path…" />
           </div>
           <div class="file-list-wrap">
-            <div id="extract-file-list"><p class="placeholder-text" style="padding:16px;">Files will appear here after extraction.</p></div>
+            <div id="extract-file-list">
+              <p class="placeholder-text" style="padding:16px;">Files will appear here after extraction.</p>
+            </div>
           </div>
         </div>
-
       </div>
+
     </section>
 
-    <!-- ════════════ COMPILER ════════════ -->
+    <!-- ════════════════════════════════════════════════════════════════
+         COMPILER TAB — EPW + EPK sub-tabs
+    ════════════════════════════════════════════════════════════════ -->
     <section id="tab-compile" class="tab-panel">
 
-      <div class="compile-layout">
-
-        <!-- Left: file slots -->
-        <div class="compile-col">
-          <h3>Client Files</h3>
-
-          <div id="slot-png" class="slot">
-            <input type="file" accept=".png" />
-            <span class="slot-icon">🖼</span>
-            <div class="slot-info">
-              <div class="slot-name">Favicon PNGs</div>
-              <div class="slot-hint">256×256, 96×96, 48×48, 32×32 — raw (multiple)</div>
-            </div>
-            <span class="slot-badge">no files</span>
-          </div>
-
-          <div id="slot-bjs" class="slot">
-            <input type="file" accept=".js" />
-            <span class="slot-icon">📜</span>
-            <div class="slot-info">
-              <div class="slot-name">bootstrap.js</div>
-              <div class="slot-hint">Inline JS bootstrap — stored raw</div>
-            </div>
-            <span class="slot-badge">no file</span>
-          </div>
-
-          <div id="slot-bwasm" class="slot">
-            <input type="file" accept=".wasm" />
-            <span class="slot-icon">⚙</span>
-            <div class="slot-info">
-              <div class="slot-name">bootstrap.wasm</div>
-              <div class="slot-hint">Inline WASM bootstrap — stored raw</div>
-            </div>
-            <span class="slot-badge">no file</span>
-          </div>
-
-          <div id="slot-html" class="slot">
-            <input type="file" accept=".html,.htm" />
-            <span class="slot-icon">🌐</span>
-            <div class="slot-info">
-              <div class="slot-name">launcher.html</div>
-              <div class="slot-hint">Full launcher page — XZ compressed</div>
-            </div>
-            <span class="slot-badge">no file</span>
-          </div>
-
-          <div id="slot-cjs" class="slot">
-            <input type="file" accept=".js" />
-            <span class="slot-icon">📜</span>
-            <div class="slot-info">
-              <div class="slot-name">client.js</div>
-              <div class="slot-hint">TeaVM-compiled game JS — XZ compressed</div>
-            </div>
-            <span class="slot-badge">no file</span>
-          </div>
-
-          <div id="slot-cwasm" class="slot">
-            <input type="file" accept=".wasm" />
-            <span class="slot-icon">⚙</span>
-            <div class="slot-info">
-              <div class="slot-name">client.wasm</div>
-              <div class="slot-hint">Main game WASM module — XZ compressed</div>
-            </div>
-            <span class="slot-badge">no file</span>
-          </div>
-
-          <div id="slot-wwasm" class="slot">
-            <input type="file" accept=".wasm" />
-            <span class="slot-icon">⚙</span>
-            <div class="slot-info">
-              <div class="slot-name">worker.wasm</div>
-              <div class="slot-hint">Audio/worker WASM module — XZ compressed</div>
-            </div>
-            <span class="slot-badge">no file</span>
-          </div>
-
-          <div id="slot-tdbg" class="slot">
-            <input type="file" accept=".tdbg" />
-            <span class="slot-icon">🐛</span>
-            <div class="slot-info">
-              <div class="slot-name">teavm_debug.tdbg</div>
-              <div class="slot-hint">TeaVM debug symbols — XZ compressed</div>
-            </div>
-            <span class="slot-badge">no file</span>
-          </div>
-        </div>
-
-        <!-- Right: assets + metadata + log -->
-        <div class="compile-col">
-          <h3>Assets</h3>
-
-          <div id="slot-assets" class="slot">
-            <input type="file" accept="*" />
-            <span class="slot-icon">📦</span>
-            <div class="slot-info">
-              <div class="slot-name">Asset Files <span class="badge-primary">primary EPK</span></div>
-              <div class="slot-hint">Textures, models, sounds, shaders — packed &rarr; EPK &rarr; XZ</div>
-            </div>
-            <span class="slot-badge">no files</span>
-          </div>
-
-          <div id="slot-lang" class="slot">
-            <input type="file" accept=".lang,.json" />
-            <span class="slot-icon">🔤</span>
-            <div class="slot-info">
-              <div class="slot-name">Lang Files <span class="badge-secondary">secondary EPK</span></div>
-              <div class="slot-hint">.lang files — packed &rarr; EPK &rarr; XZ</div>
-            </div>
-            <span class="slot-badge">no files</span>
-          </div>
-
-          <hr class="divider" />
-          <h3>Metadata</h3>
-
-          <div class="meta-form">
-            <label for="meta-package">Package name</label>
-            <input id="meta-package" type="text" placeholder="net.lax1dude.eaglercraft.v1_8.client" />
-
-            <label for="meta-client">Client name</label>
-            <input id="meta-client" type="text" placeholder="Eaglercraft" />
-
-            <label for="meta-variant">Variant ID</label>
-            <input id="meta-variant" type="text" placeholder="u0" />
-
-            <label for="meta-author">Author tag</label>
-            <input id="meta-author" type="text" placeholder="YourName" />
-
-            <label for="meta-assets-epk">Assets EPK name</label>
-            <input id="meta-assets-epk" type="text" placeholder="assets.epk" />
-
-            <label for="meta-lang-epk">Lang EPK name</label>
-            <input id="meta-lang-epk" type="text" placeholder="assets.1.0.epk" />
-
-            <label for="meta-out-filename">Output filename</label>
-            <input id="meta-out-filename" type="text" placeholder="client.epw" />
-          </div>
-
-          <div class="action-row" style="margin-top:20px;">
-            <button id="btn-compile"        class="btn-primary">Compile EPW</button>
-            <button id="btn-reset-compiler" class="btn-secondary">Reset</button>
-          </div>
-
-          <div class="note-box">
-            XZ compression is handled server-side via <code>/api/xz-compress</code>. 
-            Deploy to Vercel or run <code>vercel dev</code> locally.
-          </div>
-
-          <div class="log-panel" id="compile-log"></div>
-        </div>
-
+      <!-- Sub-tab nav -->
+      <div class="subtabs">
+        <button class="subtab-btn active" data-subtab="subtab-epw">Build EPW</button>
+        <button class="subtab-btn"        data-subtab="subtab-epk">Build EPK</button>
       </div>
+
+      <!-- ── EPW sub-tab ───────────────────────────────────────────── -->
+      <div id="subtab-epw" class="subtab-panel active">
+        <div class="compile-layout">
+
+          <!-- Left: client files -->
+          <div class="compile-col">
+            <h3>Client Files</h3>
+
+            <div id="slot-png" class="slot">
+              <input type="file" accept=".png" />
+              <span class="slot-icon">🖼</span>
+              <div class="slot-info">
+                <div class="slot-name">Favicon PNGs</div>
+                <div class="slot-hint">256, 96, 48, 32px — stored raw (multiple)</div>
+              </div>
+              <span class="slot-badge">no files</span>
+            </div>
+
+            <div id="slot-bjs" class="slot">
+              <input type="file" accept=".js" />
+              <span class="slot-icon">📜</span>
+              <div class="slot-info">
+                <div class="slot-name">bootstrap.js</div>
+                <div class="slot-hint">Inline JS bootstrap — stored raw</div>
+              </div>
+              <span class="slot-badge">no file</span>
+            </div>
+
+            <div id="slot-bwasm" class="slot">
+              <input type="file" accept=".wasm" />
+              <span class="slot-icon">⚙</span>
+              <div class="slot-info">
+                <div class="slot-name">bootstrap.wasm</div>
+                <div class="slot-hint">Inline WASM bootstrap — stored raw</div>
+              </div>
+              <span class="slot-badge">no file</span>
+            </div>
+
+            <div id="slot-html" class="slot">
+              <input type="file" accept=".html,.htm" />
+              <span class="slot-icon">🌐</span>
+              <div class="slot-info">
+                <div class="slot-name">launcher.html</div>
+                <div class="slot-hint">Full launcher page — XZ compressed</div>
+              </div>
+              <span class="slot-badge">no file</span>
+            </div>
+
+            <div id="slot-cjs" class="slot">
+              <input type="file" accept=".js" />
+              <span class="slot-icon">📜</span>
+              <div class="slot-info">
+                <div class="slot-name">client.js</div>
+                <div class="slot-hint">TeaVM-compiled game JS — XZ compressed</div>
+              </div>
+              <span class="slot-badge">no file</span>
+            </div>
+
+            <div id="slot-cwasm" class="slot">
+              <input type="file" accept=".wasm" />
+              <span class="slot-icon">⚙</span>
+              <div class="slot-info">
+                <div class="slot-name">client.wasm</div>
+                <div class="slot-hint">Main game module — XZ compressed</div>
+              </div>
+              <span class="slot-badge">no file</span>
+            </div>
+
+            <div id="slot-wwasm" class="slot">
+              <input type="file" accept=".wasm" />
+              <span class="slot-icon">⚙</span>
+              <div class="slot-info">
+                <div class="slot-name">worker.wasm</div>
+                <div class="slot-hint">Audio/worker module — XZ compressed</div>
+              </div>
+              <span class="slot-badge">no file</span>
+            </div>
+
+            <div id="slot-tdbg" class="slot">
+              <input type="file" accept=".tdbg" />
+              <span class="slot-icon">🐛</span>
+              <div class="slot-info">
+                <div class="slot-name">teavm_debug.tdbg</div>
+                <div class="slot-hint">TeaVM debug symbols — XZ compressed</div>
+              </div>
+              <span class="slot-badge">no file</span>
+            </div>
+          </div>
+
+          <!-- Right: assets + metadata -->
+          <div class="compile-col">
+            <h3>Assets</h3>
+
+            <div id="slot-assets" class="slot">
+              <input type="file" accept="*" />
+              <span class="slot-icon">📦</span>
+              <div class="slot-info">
+                <div class="slot-name">Asset Files <span class="badge-primary">primary EPK</span></div>
+                <div class="slot-hint">Textures, models, sounds — packed → EPK → XZ</div>
+              </div>
+              <span class="slot-badge">no files</span>
+            </div>
+
+            <div id="slot-lang" class="slot">
+              <input type="file" accept=".lang,.json" />
+              <span class="slot-icon">🔤</span>
+              <div class="slot-info">
+                <div class="slot-name">Lang Files <span class="badge-secondary">secondary EPK</span></div>
+                <div class="slot-hint">.lang files — packed → EPK → XZ</div>
+              </div>
+              <span class="slot-badge">no files</span>
+            </div>
+
+            <hr class="divider" />
+            <h3>Metadata</h3>
+
+            <div class="meta-form">
+              <label for="meta-package">Package name</label>
+              <input id="meta-package" type="text" placeholder="net.lax1dude.eaglercraft.v1_8.client" />
+
+              <label for="meta-client">Client name</label>
+              <input id="meta-client" type="text" placeholder="Eaglercraft" />
+
+              <label for="meta-variant">Variant ID</label>
+              <input id="meta-variant" type="text" placeholder="u0" />
+
+              <label for="meta-author">Author tag</label>
+              <input id="meta-author" type="text" placeholder="YourName" />
+
+              <label for="meta-assets-epk">Assets EPK name</label>
+              <input id="meta-assets-epk" type="text" placeholder="assets.epk" />
+
+              <label for="meta-lang-epk">Lang EPK name</label>
+              <input id="meta-lang-epk" type="text" placeholder="assets.1.0.epk" />
+
+              <label for="meta-epw-out">Output filename</label>
+              <input id="meta-epw-out" type="text" placeholder="client.epw" />
+            </div>
+
+            <div class="action-row" style="margin-top:18px;">
+              <button id="btn-compile-epw" class="btn-primary">Compile EPW</button>
+              <button id="btn-reset-epw"   class="btn-secondary">Reset</button>
+            </div>
+
+            <div class="note-box">
+              XZ compression runs via <code>/api/xz-compress</code>.
+              Deploy to Vercel or run <code>vercel dev</code> locally.
+            </div>
+
+            <div class="log-panel" id="compile-log-epw"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── EPK sub-tab ───────────────────────────────────────────── -->
+      <div id="subtab-epk" class="subtab-panel">
+        <div class="compile-layout">
+
+          <!-- Left: file input + repack -->
+          <div class="compile-col">
+            <h3>Files to Pack</h3>
+            <p class="section-hint">Drop any files you want inside the EPK. Their filenames become the in-pack paths.</p>
+
+            <div id="slot-epk-files" class="slot slot-tall">
+              <input type="file" accept="*" />
+              <span class="slot-icon">📂</span>
+              <div class="slot-info">
+                <div class="slot-name">Asset Files</div>
+                <div class="slot-hint">All file types accepted — multiple files</div>
+              </div>
+              <span class="slot-badge">no files</span>
+            </div>
+
+            <hr class="divider" />
+            <h3>Repack an Existing EPK</h3>
+            <p class="section-hint">Drop an existing <code>.epk</code> to extract its contents into the slot above for editing and repacking.</p>
+
+            <div id="slot-epk-repack" class="slot">
+              <input type="file" accept=".epk" />
+              <span class="slot-icon">♻</span>
+              <div class="slot-info">
+                <div class="slot-name">Existing EPK</div>
+                <div class="slot-hint">Extracts files → loads into slot above</div>
+              </div>
+              <span class="slot-badge">drop to repack</span>
+            </div>
+          </div>
+
+          <!-- Right: metadata + actions -->
+          <div class="compile-col">
+            <h3>EPK Metadata</h3>
+
+            <div class="meta-form">
+              <label for="meta-epk-name">EPK filename</label>
+              <input id="meta-epk-name" type="text" placeholder="assets.epk" />
+
+              <label for="meta-epk-out">Output filename</label>
+              <input id="meta-epk-out" type="text" placeholder="assets.epk" />
+            </div>
+
+            <div class="action-row" style="margin-top:18px;">
+              <button id="btn-compile-epk" class="btn-primary">Compile EPK</button>
+              <button id="btn-reset-epk"   class="btn-secondary">Reset</button>
+            </div>
+
+            <div class="note-box" style="background:rgba(59,255,196,.05); border-color:rgba(59,255,196,.2); color: var(--acc);">
+              EPK compilation is fully client-side — no server required.
+            </div>
+
+            <div class="log-panel" id="compile-log-epk"></div>
+          </div>
+        </div>
+      </div>
+
     </section>
 
   </div>
