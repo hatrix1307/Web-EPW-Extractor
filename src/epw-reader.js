@@ -1,215 +1,121 @@
-// epw-reader.js — Parse EAG$WASM EPW container files
+// epk-reader.js — Parse EAGPKG$$ v2.0 asset packs
 
-import { readU32LE, readCStr } from './binary.js'
-import { xzDecompress, gzipDecompress } from './compression.js'
-import { parseEpk } from './epk-reader.js'
+import { readU32BE } from './binary.js'
+import { gzipDecompress } from './compression.js'
 
-const EPW_MAGIC = [0x45, 0x41, 0x47, 0x24, 0x57, 0x41, 0x53, 0x4d]
-
-// ── Content-type detection ─────────────────────────────────────────────────
-
-function detectType(d) {
-  const n = d.length
-
-  // Short printable ASCII → label (discard)
-  if (n <= 64 && d.every(b => b === 0 || (b >= 0x20 && b <= 0x7e))) return 'label'
-
-  if (n >= 8 && d[0] === 0x89 && d[1] === 0x50 && d[2] === 0x4e && d[3] === 0x47
-             && d[4] === 0x0d && d[5] === 0x0a && d[6] === 0x1a && d[7] === 0x0a)
-    return 'png'
-
-  if (n >= 4 && d[0] === 0x00 && d[1] === 0x61 && d[2] === 0x73 && d[3] === 0x6d)
-    return 'wasm'
-
-  if (n >= 6 && d[0] === 0xfd && d[1] === 0x37 && d[2] === 0x7a
-             && d[3] === 0x58 && d[4] === 0x5a && d[5] === 0x00)
-    return 'xz'
-
-  if (n >= 2 && d[0] === 0x1f && d[1] === 0x8b)
-    return 'gzip'
-
-  if (n >= 8 && d[0] === 0x45 && d[1] === 0x41 && d[2] === 0x47 && d[3] === 0x50
-             && d[4] === 0x4b && d[5] === 0x47 && d[6] === 0x24 && d[7] === 0x24)
-    return 'epk'
-
-  if (n >= 4 && d[0] === 0x74 && d[1] === 0x64 && d[2] === 0x62 && d[3] === 0x67)
-    return 'tdbg'
-
-  if (n > 0 && d[0] === 0x3c)
-    return 'html'
-
-  if (n > 0 && (d[0] === 0x28 || d[0] === 0x21 || d[0] === 0x22 || d[0] === 0x27))
-    return 'js'
-
-  return 'blob'
+/** Detect basic MIME type from filename extension. */
+function mimeFor(name) {
+  const ext = name.split('.').pop().toLowerCase()
+  return ({
+    png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+    ogg: 'audio/ogg', wav: 'audio/wav', mp3: 'audio/mpeg',
+    json: 'application/json', mcmeta: 'application/json',
+    txt: 'text/plain', lang: 'text/plain',
+    vsh: 'text/plain', fsh: 'text/plain', glsl: 'text/plain',
+    bin: 'application/octet-stream', class: 'application/octet-stream',
+  })[ext] ?? 'application/octet-stream'
 }
-
-// ── Naming state ──────────────────────────────────────────────────────────
-
-const PNG_NAMES  = ['favicon_256.png', 'favicon_96.png', 'favicon_48.png', 'favicon_32.png']
-const WASM_NAMES = ['bootstrap.wasm', 'client.wasm', 'worker.wasm']
-const JS_NAMES   = ['bootstrap.js', 'client.js']
-
-class NamingState {
-  constructor() {
-    this.pngs  = 0
-    this.wasms = 0
-    this.jss   = 0
-    this.blobs = 0
-  }
-  nextPng()  { return 'client/' + (PNG_NAMES[this.pngs++]  ?? `favicon_extra_${this.pngs}.png`) }
-  nextWasm() { return 'client/' + (WASM_NAMES[this.wasms++] ?? `extra_${this.wasms}.wasm`) }
-  nextJs()   { return 'client/' + (JS_NAMES[this.jss++]    ?? `extra_${this.jss}.js`) }
-  nextBlob() { return `client/blob_${this.blobs++}.bin` }
-}
-
-// ── Section processor (recursive through XZ / GZIP wrappers) ──────────────
-
-async function processData(data, state, results, onLog) {
-  const type = detectType(data)
-
-  if (type === 'label') {
-    onLog?.(`  Skipping label: "${new TextDecoder().decode(data).replace(/\0/g, '')}"`)
-    return
-  }
-
-  if (type === 'xz') {
-    onLog?.('  Decompressing XZ section…')
-    const inner = await xzDecompress(data)
-    await processData(inner, state, results, onLog)
-    return
-  }
-
-  if (type === 'gzip') {
-    onLog?.('  Decompressing GZIP section…')
-    const inner = gzipDecompress(data)
-    await processData(inner, state, results, onLog)
-    return
-  }
-
-  if (type === 'png') {
-    const name = state.nextPng()
-    onLog?.(`  PNG  → ${name}  (${data.length} bytes)`)
-    results.push({ name, data, mimeType: 'image/png' })
-    return
-  }
-
-  if (type === 'wasm') {
-    const name = state.nextWasm()
-    onLog?.(`  WASM → ${name}  (${data.length} bytes)`)
-    results.push({ name, data, mimeType: 'application/wasm' })
-    return
-  }
-
-  if (type === 'html') {
-    onLog?.(`  HTML → client/launcher.html  (${data.length} bytes)`)
-    results.push({ name: 'client/launcher.html', data, mimeType: 'text/html' })
-    return
-  }
-
-  if (type === 'js') {
-    const name = state.nextJs()
-    onLog?.(`  JS   → ${name}  (${data.length} bytes)`)
-    results.push({ name, data, mimeType: 'text/javascript' })
-    return
-  }
-
-  if (type === 'tdbg') {
-    onLog?.(`  TDBG → client/teavm_debug.tdbg  (${data.length} bytes)`)
-    results.push({ name: 'client/teavm_debug.tdbg', data, mimeType: 'application/octet-stream' })
-    return
-  }
-
-  if (type === 'epk') {
-    onLog?.(`  EPK  detected, parsing…`)
-    const { files } = parseEpk(data, onLog)
-    results.push(...files)
-    return
-  }
-
-  // Fallback blob
-  const name = state.nextBlob()
-  onLog?.(`  BLOB → ${name}  (${data.length} bytes, type=${type})`)
-  results.push({ name, data, mimeType: 'application/octet-stream' })
-}
-
-// ── Main parser ────────────────────────────────────────────────────────────
 
 /**
- * Parse an EPW file buffer.
+ * Parse an EAGPKG$$ v2.0 EPK blob.
  *
- * @param {ArrayBuffer|Uint8Array} buffer
- * @param {(msg: string) => void} [onLog]
- * @returns {Promise<{ metadata: object, files: Array<{name,data,mimeType}> }>}
+ * @param {Uint8Array|ArrayBuffer} raw
+ * @param {(msg:string)=>void}     [onLog]
+ * @returns {{ epkName: string, dir: string, timestamp: number, files: Array<{name,data,mimeType}> }}
  */
-export async function parseEpw(buffer, onLog) {
-  const buf = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer)
+export function parseEpk(raw, onLog) {
+  const buf = raw instanceof Uint8Array ? raw : new Uint8Array(raw)
+  const dec = new TextDecoder()
+  let pos = 0
 
   // ── Magic ──────────────────────────────────────────────────────────────────
-  for (let i = 0; i < 8; i++) {
-    if (buf[i] !== EPW_MAGIC[i]) throw new Error('Not a valid EPW file (bad magic bytes)')
-  }
-  onLog?.('Magic OK: EAG$WASM')
+  const magic = dec.decode(buf.slice(0, 8))
+  if (magic !== 'EAGPKG$$') throw new Error('Not an EPK file (expected EAGPKG$$ magic)')
+  pos = 8
 
-  const totalSize = readU32LE(buf, 0x08)
-  onLog?.(`File size: ${buf.length} bytes (header says ${totalSize})`)
+  // ── Version string ─────────────────────────────────────────────────────────
+  const verLen    = buf[pos++]
+  const version   = dec.decode(buf.slice(pos, pos + verLen))
+  pos += verLen
 
-  // ── Metadata entries: four 16-byte entries at 0x18–0x57 ───────────────────
-  // Each 16-byte entry holds TWO (string_offset, string_length) pairs of 4 bytes each.
-  // Pair 0 at [+0..+7], pair 1 at [+8..+15].
-  const META_KEYS  = ['packageName', 'clientName', 'variantId', 'authorTag']
-  const META_BASES = [0x18, 0x28, 0x38, 0x48]
-  const metadata   = {}
+  // ── EPK filename ───────────────────────────────────────────────────────────
+  const fnLen  = buf[pos++]
+  const epkName = dec.decode(buf.slice(pos, pos + fnLen))
+  pos += fnLen
 
-  // From actual EPW analysis: entry[0].pair0=packageName, entry[0].pair1=clientName,
-  // entry[1].pair0=variantId, entry[1].pair1=authorTag (entries 2–3 are duplicates).
-  const readMetaStr = (base, pairIndex) => {
-    const off = base + pairIndex * 8
-    const strOff = readU32LE(buf, off)
-    const strLen = readU32LE(buf, off + 4)
-    if (strOff > 0 && strLen > 0 && strOff + strLen <= buf.length) {
-      return new TextDecoder().decode(buf.slice(strOff, strOff + strLen))
+  // ── Null terminator ────────────────────────────────────────────────────────
+  pos++ // 0x00
+
+  // ── Scan to \n\n\0 marker ──────────────────────────────────────────────────
+  let found = false
+  while (pos < buf.length - 2) {
+    if (buf[pos] === 0x0a && buf[pos + 1] === 0x0a && buf[pos + 2] === 0x00) {
+      pos += 3; found = true; break
     }
-    return ''
+    pos++
   }
+  if (!found) throw new Error('EPK: could not find \\n\\n\\0 marker')
 
-  metadata.packageName = readMetaStr(0x18, 0)
-  metadata.clientName  = readMetaStr(0x18, 1)
-  metadata.variantId   = readMetaStr(0x28, 0)
-  metadata.authorTag   = readMetaStr(0x28, 1)
+  // ── Binary section header: 8-byte timestamp (uint64 BE) + 4-byte count ────
+  // Read timestamp as two 32-bit halves (JS can't do full uint64)
+  const tsHi  = readU32BE(buf, pos);     pos += 4
+  const tsLo  = readU32BE(buf, pos);     pos += 4
+  const timestamp = tsHi * 0x100000000 + tsLo   // ms since epoch (may lose precision >2^53)
+  pos += 4  // entry count (informational)
 
-  onLog?.(`Metadata: package=${metadata.packageName} client=${metadata.clientName} variant=${metadata.variantId} author=${metadata.authorTag}`)
+  // ── Output directory derived from EPK filename ─────────────────────────────
+  const dir = epkName.replace(/\.epk$/i, '')
 
-  // ── Section entries: 16 entries × 16 bytes at 0x60–0x15F ─────────────────
-  const sectionEntries = []
-  for (let i = 0; i < 16; i++) {
-    const base       = 0x60 + i * 16
-    const typeField  = readU32LE(buf, base)
-    const dataOffset = readU32LE(buf, base +  4)
-    const compSize   = readU32LE(buf, base +  8)
-    const decompSize = readU32LE(buf, base + 12)
-    if (dataOffset === 0 && compSize === 0) continue
-    sectionEntries.push({ index: i, typeField, dataOffset, compSize, decompSize })
-  }
-  onLog?.(`Found ${sectionEntries.length} non-empty section entries`)
+  const files = []
 
-  // ── Process sections ──────────────────────────────────────────────────────
-  const state   = new NamingState()
-  const results = []
+  // ── Records ────────────────────────────────────────────────────────────────
+  while (pos < buf.length) {
+    if (pos + 5 > buf.length) break
 
-  for (let si = 0; si < sectionEntries.length; si++) {
-    const { index, dataOffset, compSize } = sectionEntries[si]
-    onLog?.(`\nSection [${index}] offset=${dataOffset} size=${compSize}`)
+    const tag5 = dec.decode(buf.slice(pos, pos + 5))
 
-    if (dataOffset + compSize > buf.length) {
-      onLog?.(`  Section overruns file — skipping`)
+    if (tag5 === 'END$$') break
+
+    // 0HEAD — skip key/value metadata block
+    if (tag5 === '0HEAD') {
+      pos += 5
+      while (pos < buf.length && buf[pos] !== 0x3e) pos++
+      pos++ // skip '>'
       continue
     }
 
-    const sectionData = buf.slice(dataOffset, dataOffset + compSize)
-    await processData(sectionData, state, results, onLog)
+    // FILE record
+    if (buf[pos]===0x46 && buf[pos+1]===0x49 && buf[pos+2]===0x4c && buf[pos+3]===0x45) {
+      pos += 4
+      const nameLen  = buf[pos++]
+      const filename = dec.decode(buf.slice(pos, pos + nameLen))
+      pos += nameLen
+
+      const recordSize = readU32BE(buf, pos); pos += 4
+      /* CRC32 */                              pos += 4
+      const contentLen = recordSize - 4
+
+      if (pos + contentLen > buf.length) {
+        onLog?.(`Warning: FILE record for "${filename}" overruns buffer — skipping`)
+        break
+      }
+
+      let content = buf.slice(pos, pos + contentLen)
+      pos += contentLen
+
+      // Transparent GZIP decompression of individual file records
+      if (content[0] === 0x1f && content[1] === 0x8b) {
+        try   { content = gzipDecompress(content) }
+        catch { onLog?.(`Warning: GZIP decompress failed for ${filename}`) }
+      }
+
+      files.push({ name: `${dir}/${filename}`, data: content, mimeType: mimeFor(filename) })
+      continue
+    }
+
+    pos++ // unknown — scan forward
   }
 
-  onLog?.(`\nExtraction complete. ${results.length} files.`)
-  return { metadata, files: results }
+  onLog?.(`EPK "${epkName}" (${version}): extracted ${files.length} files`)
+  return { epkName, dir, version, timestamp, files }
 }
