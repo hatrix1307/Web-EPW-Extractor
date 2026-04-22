@@ -194,7 +194,7 @@ function initExtractor() {
   }
 
   async function handleEpk(bytes, filename, metaPanel) {
-    const { epkName, version, timestamp, files } = parseEpk(bytes, autoLog)
+    const { epkName, version, timestamp, files } = await parseEpk(bytes, autoLog)
     extractedFiles = files
     metaPanel.innerHTML = `
       <div class="file-type-badge epk-badge">EPK</div>
@@ -335,7 +335,7 @@ async function handleEpkRepack(file) {
   try {
     const bytes = new Uint8Array(await file.arrayBuffer())
     if (detectFileType(bytes) !== 'epk') throw new Error('File is not an EPK (EAGPKG$$ magic required)')
-    const { files, epkName } = parseEpk(bytes, autoLog)
+    const { files, epkName } = await parseEpk(bytes, autoLog)
     // Strip the dir prefix so paths are relative again
     const stripped = files.map(f => {
       const dir = epkName.replace(/\.epk$/i, '')
