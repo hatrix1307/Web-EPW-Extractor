@@ -77,3 +77,45 @@ export function makeZip(files) {
   }
   return zipSync(input, { level: 0 })
 }
+
+// ── Raw deflate (partial-stream tolerant) ─────────────────────────────────
+// Used for Variant B EPK files whose deflate stream lacks an end-of-stream marker.
+// Falls back gracefully by reading until the DecompressionStream errors.
+
+/**
+ * Decompress a raw deflate stream that may be incomplete (no BFINAL=1 marker).
+ * Uses the browser-native DecompressionStream API (Chrome 80+, FF 113+, Safari 16.4+).
+ * Collects all output until the stream errors or ends, then returns it.
+ *
+ * @param {Uint8Array} data  Raw deflate bytes (no gzip/zlib header)
+ * @returns {Promise<Uint8Array>}
+ */
+export async function rawInflatePartial(data) {
+  const input  = data instanceof Uint8Array ? data : new Uint8Array(data)
+  const ds     = new DecompressionStream('deflate-raw')
+  const writer = ds.writable.getWriter()
+  const reader = ds.readable.getReader()
+  const chunks = []
+
+  // Drain reader in background — ignore errors from partial stream
+  const drained = (async () => {
+    try {
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        if (value) chunks.push(value)
+      }
+    } catch (_) { /* partial stream — normal */ }
+  })()
+
+  // Write everything then close (close may throw on partial deflate — ignore)
+  try { await writer.write(input) } catch (_) {}
+  try { await writer.close()      } catch (_) {}
+  await drained
+
+  const total  = chunks.reduce((n, c) => n + c.length, 0)
+  const result = new Uint8Array(total)
+  let   off    = 0
+  for (const c of chunks) { result.set(c, off); off += c.length }
+  return result
+}
